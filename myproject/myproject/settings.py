@@ -16,7 +16,6 @@ import os
 import datetime
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -71,9 +70,9 @@ def get_custom_primary_key_settings():
 
 
 SIMPLE_JWT = {
-    'JWT_PAYLOAD_HANDLER': 'myapp.utils.jwt_settings.custom_token_payload',
+    'TOKEN_OBTAIN_PAIR_SERIALIZER': 'myproject.myapp.serializers.CustomTokenObtainPairSerializer',
     'AUTH_HEADER_TYPES': ('Bearer',),
-    'ACCESS_TOKEN_LIFETIME': datetime.timedelta(minutes=int(os.getenv('TOKEN_EXPIRATION_TIME', 60))),
+    'ACCESS_TOKEN_LIFETIME': datetime.timedelta(minutes=int(os.getenv('TOKEN_EXPIRATION_TIME', 525960))),
     **get_custom_primary_key_settings(),
 }
 

@@ -1,14 +1,11 @@
-from django.shortcuts import render
 from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, Grievance
 from .serializers import UserSerializer, GrievanceSerializer
+from .utils.decoraters import IsAuthenticated
 from .utils.forms import LoginForm, generate_captcha, generate_captcha_image
-from django.contrib.sessions.models import Session
 from rest_framework_simplejwt.tokens import AccessToken
 
 
@@ -21,7 +18,7 @@ def signup(request):
     is_admin = request.data.get('is_admin')
 
     if User.objects.filter(email=email).exists():
-        return Response({'error': 'Email already Exists'}, status=400)
+        return Response({'error': 'Email already Exists'}, status=200)
 
     # user = request.data
     user = User.objects.create_user(email=email, username=username, password=password, is_active=is_active,
@@ -108,36 +105,28 @@ def logout(request):
 @permission_classes([IsAuthenticated])
 def create_grievance(request):
     serializer_data = request.data.copy()  # Create a copy of the request data
-    print("Logged In User Data", request.user)
-    print("Entered Data", request.data)
 
-    # Extract the token from the request header
-    authorization_header = request.META.get('HTTP_AUTHORIZATION')
+    try:
+        print("Request User::::::::", request.user)
+        print("Request UserName::::::::", request.user.username)
+        print("User ID:", request.user.user_id)
+        print("Email:", request.user.email)
+        serializer_data['user'] = request.user.user_id
+        serializer = GrievanceSerializer(data=serializer_data)
 
-    if authorization_header:
-        try:
-            token = authorization_header.split()[1]  # Extract the token part
-            decoded_token = AccessToken(token)
-            print("Decoded token:", decoded_token)
+        if serializer.is_valid():
+            # Save the Grievance instance with user_id set
+            serializer.save()  # Assuming Grievance model has user_id field
+            return Response({'message': 'Grievance created successfully'}, status=201)
 
-            user_data = decoded_token.payload.get('user_data')  # Retrieve user_data from token payload
+        return Response(serializer.errors, status=400)
 
-            print("User Data from Token:", user_data)
-
-            serializer = GrievanceSerializer(data=serializer_data)
-
-            if serializer.is_valid():
-                # Save the Grievance instance with user_id set
-                serializer.save()
-                return Response({'message': 'Grievance created successfully'}, status=201)
-
-            return Response(serializer.errors, status=400)
-
-        except Exception as e:
-            print("Error decoding or accessing token payload:", e)
-            return Response({'error': 'Token error'}, status=400)
-    else:
-        return Response({'error': 'Authorization header not found'}, status=400)
+    except IndexError:
+        # Handle cases where the token is not found or not in the expected format
+        return Response({'error': 'Invalid token format'}, status=400)
+    except KeyError as e:
+        # Handle cases where the expected claims are not present in the token payload
+        return Response({'error': f'Missing claim in token: {e}'}, status=400)
 
 
 @api_view(['GET'])
@@ -148,27 +137,64 @@ def view_grievance(request):
     return Response(serializer.data, status=200)
 
 
-@api_view(['PUT'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def update_grievance(request, grievance_id):
-    grievance = Grievance.objects.filter(id=grievance_id, user=request.user).first()
+def view_grievance_by_userid(request, user_id):
+    grievances = Grievance.objects.filter(user_id=user_id, user=request.user)
+    serializer = GrievanceSerializer(grievances, many=True)
+    if grievances is None:
+        return Response({'error': 'No data found'}, status=404)
 
-    if grievance is None:
+    return Response(serializer.data, status=200)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_grievances_by_userorgkid(request):
+    type_of_id = request.data.get('type_of_id')
+    id = request.data.get('value')
+
+    if id and not (id.startswith('G') or id.startswith('U')):
+        return Response({
+            'statusCode': '0',
+            'messege': 'Please enter a valid id'
+        })
+    if type_of_id == 'user_id':
+        grievances = Grievance.objects.filter(user_id=id, user=request.user)
+    elif type_of_id == 'gk_id':
+        grievances = Grievance.objects.filter(gk_id=id, user=request.user)
+    else:
+        return Response({'statusCode': '0',
+                         'messege': 'Please enter a valid id type'})
+
+    serializer = GrievanceSerializer(grievances, many=True)
+
+    return Response(serializer.data, status=200)
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def update_grievance(request, gk_id):
+    try:
+        grievance = Grievance.objects.get(pk=gk_id, user=request.user)
+
+        serializer = GrievanceSerializer(grievance, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=200)
+
+        return Response(serializer.errors, status=400)
+
+    except Grievance.DoesNotExist:
         return Response({'error': 'Grievance not found'}, status=404)
-
-    serializer = GrievanceSerializer(grievance, data=request.data, partial=True)
-
-    if serializer.is_valid():
-        serializer.save()
-        return Response({'message': 'Grievance updated successfully'}, status=200)
-
-    return Response(serializer.errors, status=400)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 
-@api_view(['DELETE'])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def delete_grievance(request, grievance_id):
-    grievance = Grievance.objects.filter(id=grievance_id, user=request.user).first()
+def delete_grievance(request, gk_id):
+    grievance = Grievance.objects.filter(gk_id=gk_id, user=request.user).first()
 
     if grievance is None:
         return Response({'error': 'Grievance not found'}, status=404)

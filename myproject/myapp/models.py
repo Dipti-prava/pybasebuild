@@ -58,9 +58,8 @@ class Grievance(models.Model):
     created_date = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        # Generate the gk_id if it's a new instance
-        if not self.pk:
-            last_grievance = Grievance.objects.all().order_by('-gk_id').first()
+        if not self.gk_id:
+            last_grievance = Grievance.objects.order_by('-gk_id').first()
             if last_grievance:
                 last_id = int(last_grievance.gk_id[1:])  # Extract the numeric part
                 new_id = f'G{last_id + 1:03}'  # Increment by 1 and format as 'G001'
@@ -69,3 +68,20 @@ class Grievance(models.Model):
             self.gk_id = new_id
 
         super(Grievance, self).save(*args, **kwargs)
+
+
+class Role(models.Model):
+    role_id = models.CharField(max_length=5, primary_key=True)
+    role_name = models.CharField(max_length=255)
+    role_desc = models.TextField()
+
+
+class Resource(models.Model):
+    resource_id = models.CharField(max_length=5, primary_key=True)
+    resource_name = models.CharField(max_length=255)
+    resource_desc = models.TextField()
+
+
+class RoleResourceMapping(models.Model):
+    role_id = models.ForeignKey(Role, on_delete=models.CASCADE)
+    resource_id = models.ForeignKey(Resource, on_delete=models.CASCADE)
