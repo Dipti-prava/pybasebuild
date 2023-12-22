@@ -1,3 +1,5 @@
+import os
+
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 
@@ -83,5 +85,37 @@ class Resource(models.Model):
 
 
 class RoleResourceMapping(models.Model):
-    role_id = models.ForeignKey(Role, on_delete=models.CASCADE)
-    resource_id = models.ForeignKey(Resource, on_delete=models.CASCADE)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE)
+    resource = models.ForeignKey(Resource, on_delete=models.CASCADE)
+
+
+def document_upload_path(instance, filename):
+    # Get the file extension
+    extension = os.path.splitext(filename)[1][1:].lower()  # Get the file extension without '.'
+
+    # Determine the sub folder based on the file extension
+    if extension == 'pdf':
+        return f'documents/pdf/{filename}'
+    elif extension == 'xlsx' or extension == 'xls':
+        return f'documents/excel/{filename}'
+    elif extension in ['jpg', 'jpeg', 'png']:
+        return f'documents/images/{filename}'
+    elif extension == 'doc' or extension == 'docx':
+        return f'documents/word/{filename}'
+    elif extension == 'ppt' or extension == 'pptx':
+        return f'documents/ppt/{filename}'
+    else:
+        return f'documents/others/{filename}'
+
+
+class Document(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    category = models.CharField(max_length=255)
+    name = models.CharField(max_length=255)
+    doc = models.FileField(upload_to=document_upload_path)  # FileField for the uploaded document
+    doc_type = models.CharField(max_length=100)
+    size = models.IntegerField()
+    upload_time = models.DateTimeField(auto_now_add=True)  # Timestamp of upload
+
+    def __str__(self):
+        return self.name

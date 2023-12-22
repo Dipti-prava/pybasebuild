@@ -16,21 +16,20 @@ import os
 import datetime
 from dotenv import load_dotenv
 
-load_dotenv()
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env file
+load_dotenv()
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = '961a57166796e968c2a82cbf1657926dd76cd9829921d0660e8266a475067bb6'
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*', 'localhost', '127.0.0.1']
 
 # Application definition
 
@@ -106,20 +105,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'myproject.wsgi.application'
 
-# Database
-# https://docs.djangoproject.com/en/4.1/ref/settings/#databases
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'mydatabase',
-        'USER': 'postgres',
-        'PASSWORD': 'techlab',
-        'HOST': 'localhost',
-        'PORT': '5433'
-    }
-}
-
 AUTH_USER_MODEL = 'myapp.User'
 
 # Password validation
@@ -169,3 +154,12 @@ PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.Argon2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
 ]
+CORS_ORIGIN_ALLOW_ALL = True
+
+# CORS_ALLOWED_ORIGINS = [
+#     "http://192.168.0.117",
+#     "http://192.168.0.130",
+#     "http://192.168.0.130:3001",
+#     "http://localhost:3000",
+#     "https://example.com",
+# ]
