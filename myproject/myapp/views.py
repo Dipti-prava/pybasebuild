@@ -1,7 +1,10 @@
 import base64
+import logging
 import os
+import uuid
 
 import pyotp
+from django.contrib.auth.hashers import check_password
 from django.core.files.base import ContentFile
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
@@ -12,10 +15,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, Grievance, Document
 from .serializers import UserSerializer, GrievanceSerializer, DocumentSerializer
 from .utils.decoraters import IsAuthenticated
-from .utils.forms import LoginForm, generate_captcha, generate_captcha_image
+from .utils.forms import LoginForm, generate_captcha, generate_captcha_image, store_captcha_with_identifier, \
+    get_captcha_from_storage, encode_password
 from rest_framework_simplejwt.tokens import AccessToken
 
 user_dto = {}
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
@@ -46,7 +52,7 @@ def signup(request):
     username = request.data.get('username')
     password = request.data.get('password')
     is_active = request.data.get('is_active')
-    is_admin = request.data.get('is_admin')
+    is_admin = False
 
     if User.objects.filter(email=email).exists():
         return Response({'error': 'Email already Exists'}, status=200)
@@ -66,35 +72,73 @@ def signup(request):
 @api_view(['GET'])
 def captcha_image(request):
     captcha_challenge = generate_captcha()
-    request.session['captcha'] = captcha_challenge
-    image_buffer = generate_captcha_image(captcha_challenge)
+    captcha_key = str(uuid.uuid4())
 
-    response = HttpResponse(image_buffer, content_type='image/png')
+    # Store the captcha challenge with the unique identifier in the session
+    store_captcha_with_identifier(request, captcha_key, captcha_challenge)
+    print("stored captcha key", captcha_key)
+    print("session_key in captcha", request.session.session_key)
+    cc = get_captcha_from_storage(request.session.session_key, captcha_key)  # Implement this retrieval logic
+    print("gdhgfhdgf666666666666", cc)
+    image_buffer = generate_captcha_image(captcha_challenge)
+    response = HttpResponse(image_buffer.getvalue(), content_type='image/jpeg')
+    # Set the captcha key in the response header
+    # response.set_cookie('PSESSION', request.session.session_key, httponly=True)
+    response['x-session-key'] = request.session.session_key
+    response['x-captcha-key'] = captcha_key
+    response['Access-Control-Expose-Headers'] = 'x-captcha-key,x-session-key'
+    response[
+        "Access-Control-Allow-Headers"] = "proxyId", "X-Requested-With", "x-captcha-key", "content-type", "x-session-key", "Set-Cookie", "Origin"
+    response["Access-Control-Allow-Credentials"] = "true"
+    response['Referrer-Policy'] = 'no-referrer'
+    response['Vary'] = 'Origin'
     return response
 
 
 @api_view(['POST'])
 def signin(request):
-    captcha_challenge = request.session.get('captcha')
-    form = LoginForm(initial={'captcha': captcha_challenge}, data=request.data)
+    session_id = request.headers.get('x-session-key')
+    print("session_id", session_id)
+    captcha_key = request.headers.get('x-captcha-key')  # Identifier sent by the user
+    captcha = request.data.get('captcha')  # Captcha response sent by the user
+    print("received captcha key", captcha_key)
+    captcha_challenge = get_captcha_from_storage(session_id, captcha_key)  # Implement this retrieval logic
+    print("gdhgfhdgf666666666666", captcha_challenge)
+    if captcha_challenge is None:
+        return Response({'error': 'Invalid or expired captcha challenge'}, status=400)
+
+    form = LoginForm(data=request.data)
 
     if form.is_valid():
-
         email = form.cleaned_data.get('email')
         password = form.cleaned_data.get('password')
-        captcha_response = form.cleaned_data.get('captcha')
+        print("rtyrtyetry", password)
+        salt = captcha  # Assuming salt is sent along with the password
+        # decrypted_password = encrypt_password_with_salt(password, salt, 1)
+        decrypted_password = encode_password(password, 1)
+
+        print("Stored CAPTCHA Challenge:", captcha_challenge)
+        print("User Input CAPTCHA:", captcha)
+        print("Email:", email)
+        print("Decrypted Password:", decrypted_password)
 
         user = User.objects.filter(email=email).first()
 
-        print("User Data", user)
-
-        if captcha_response != captcha_challenge:
+        print("User Data:", user)
+        print("Storred", user.password)
+        if check_password(decrypted_password, user.password):
+            print("matcheddddddddddd")
+        else:
+            print("better luck next time")
+        if captcha != captcha_challenge:
             return Response({'error': 'Invalid CAPTCHA. Please try again.'}, status=400)
+
         if user is None:
             return Response({'error': 'Email does not exist'}, status=400)
 
-        if user is None or not user.check_password(password):
+        if password != user.password:
             return Response({'error': 'Invalid email or password'}, status=400)
+
         if not user.is_active:
             return Response({'error': 'User is not Active'}, status=400)
 
@@ -117,7 +161,7 @@ def signin(request):
     else:
         # If the form is invalid, construct an error response
         errors = dict(form.errors.items())
-        return Response({'error': errors}, status=400)
+        return Response({'error': 'Something went wrong'}, status=400)
 
 
 @api_view(['POST'])
@@ -236,35 +280,80 @@ def delete_grievance(request, gk_id):
     return Response({'statusCode': '1', 'message': 'Grievance deleted successfully'}, status=200)
 
 
+def get_file_extension(mimetype):
+    extension = ''
+    if mimetype == 'data:application/pdf':
+        extension = 'pdf'
+    elif mimetype == 'data:application/vnd.ms-powerpoint':
+        extension = 'ppt'
+    elif mimetype == 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation':
+        extension = 'pptx'
+    elif mimetype in ['data:application/vnd.ms-excel', 'data:application/msexcel']:
+        extension = 'xls'
+    elif mimetype == 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+        extension = 'xlsx'
+    elif mimetype == 'data:application/msword':
+        extension = 'doc'
+    elif mimetype == 'data:application/data:application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        extension = 'docx'
+    elif mimetype == 'data:image/jpg':
+        extension = 'jpg'
+    elif mimetype == 'data:image/jpeg':
+        extension = 'jpeg'
+    elif mimetype == 'data:image/png':
+        extension = 'png'
+    else:
+        extension = '0'
+    return extension
+
+
+def get_allowed_extension(doctype):
+    allowed_extensions = []
+    if doctype == 'pdf':
+        allowed_extensions = ['pdf']
+    elif doctype == 'ppt':
+        allowed_extensions = ['ppt', 'pptx']
+    elif doctype == 'word':
+        allowed_extensions = ['doc', 'docx']
+    elif doctype == 'excel':
+        allowed_extensions = ['xls', 'xlsx']
+    elif doctype == 'image':
+        allowed_extensions = ['jpg', 'jpeg', 'png']
+    return allowed_extensions
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upload_document(request):
-    allowed_extensions = ['pdf', 'ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png']
     doc_category = request.data.get('category')
-    doc_type = request.data.get('doc_type')
+    doc_type = request.data.get('fileType')
     document_name = request.data.get('name')
     doc_data = request.data.get('doc')
-
-    if not all([document_name, doc_data]):
+    allowed_extensions = get_allowed_extension(doc_type.lower())
+    print("allowed_extensions", allowed_extensions)
+    if not all([doc_category, doc_type, document_name, doc_data]):
         return Response({'statusCode': '0', 'error': 'Missing required data'}, status=400)
 
     try:
-        # Get the file extension
-        extension = document_name.split('.')[-1].lower()
-        if extension not in allowed_extensions:
-            return Response({'error': 'File type not allowed'}, status=400)
 
         format, docstr = doc_data.split(';base64,')  # Extract format and data
+        print("format:::", format)
+        extension = get_file_extension(format)
+        if extension not in allowed_extensions:
+            return Response({'message': 'Please upload a valid ' + doc_type + ' file'}, status=400)
+
         image_data = base64.b64decode(docstr)
         size = len(image_data)
         size = size / (1024 * 1024)  # convert to mb
+        document_name = document_name + '.' + extension
         document = ContentFile(image_data, name=document_name)
 
         # Save document details in the database
         document_object = Document.objects.create(
             user_id=request.user.user_id,
             name=document_name,
-            doc_type=extension,
+            category=doc_category,
+            doc_type=doc_type,
             size=size,
             doc=document  # Save the ContentFile in the 'doc' field of Document model
         )
@@ -520,8 +609,18 @@ def update_document(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def delete_document(request, doc_id):
+def delete_document(request):
+    doc_id = request.data.get('doc_id')
+    if not doc_id or not isinstance(doc_id, int):
+        return Response({'statusCode': '0', 'error': 'Invalid or empty doc_id'}, status=400)
+
     try:
+        document_exists = Document.objects.filter(pk=doc_id, user=request.user).exists()
+
+        if not document_exists:
+            return Response(
+                {"statusCode": 0, "message": "Document with id " + format(doc_id) + " does not exist"}, status=400)
+
         document = Document.objects.get(pk=doc_id, user=request.user)
         print(document)
         # Get the path of the document file
@@ -535,7 +634,7 @@ def delete_document(request, doc_id):
 
         return Response({'statusCode': '1', 'message': 'Document deleted successfully'}, status=200)
     except Document.DoesNotExist:
-        return Response({'statusCode': '0', 'error': 'Document not found'}, status=404)
+        return Response({'statusCode': '0', 'error': 'Document not found'}, status=400)
 
     except Exception as e:
         return Response({'statusCode': '0', 'error': str(e)}, status=500)

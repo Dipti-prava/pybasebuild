@@ -1,8 +1,13 @@
+import hashlib
+
 from django import forms
 import random
 import string
 from PIL import Image, ImageDraw, ImageFont
 import io
+from django.contrib.sessions.backends.db import SessionStore
+from django.contrib.sessions.models import Session
+from django.utils import timezone
 
 
 class CaptchaField(forms.CharField):
@@ -16,6 +21,35 @@ class CaptchaField(forms.CharField):
 def generate_captcha():
     # Generate a random 6-character string with letters and digits
     return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+
+
+# Function to store captcha challenge with an identifier in the session
+def store_captcha_with_identifier(request, captcha_key, captcha_challenge):
+    if not request.session.session_key:
+        request.session.save()  # Create a session if it doesn't exist yet
+    print("store_captcha_with_identifier", request.session.session_key)
+    request.session.setdefault('captcha_challenges', {})[captcha_key] = captcha_challenge
+    request.session.modified = True  # Mark the session as modified to ensure it's saved
+    request.session.save()  # Save the session after modifications
+
+
+# Function to retrieve captcha from the session using the identifier
+def get_captcha_from_storage(session_key, identifier):
+    try:
+        # Get the session object based on the session key
+        session = Session.objects.get(session_key=session_key)
+        # Check if the session is not expired
+        if session.expire_date > timezone.now():
+            # Access the session data dictionary
+            session_data = session.get_decoded()
+            # Get the captcha challenges from the session data using the identifier
+            captcha_challenges = session_data.get('captcha_challenges', {})
+            captcha = captcha_challenges.get(identifier)
+            return captcha
+    except Session.DoesNotExist:
+        pass
+
+    return None
 
 
 def generate_captcha_image(captcha_challenge):
@@ -54,3 +88,15 @@ class LoginForm(forms.Form):
     email = forms.CharField(max_length=150)
     password = forms.CharField(widget=forms.PasswordInput)
     captcha = CaptchaField(max_length=6)
+
+
+def encode_password(data, no_of_times):
+    # password = data
+    # for _ in range(no_of_times):
+    #     # Perform SHA512 hashing
+    #     password = hashlib.sha512(password.encode()).hexdigest()
+    # return password
+    decoded_password = data.encode('utf-8')
+    for _ in range(no_of_times):
+        decoded_password = hashlib.sha512(decoded_password).hexdigest().encode('utf-8')
+    return decoded_password.decode('utf-8')

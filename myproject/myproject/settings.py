@@ -86,7 +86,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 ROOT_URLCONF = 'myproject.urls'
-
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_SAMESITE = 'None'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -154,12 +155,30 @@ PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.Argon2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
 ]
-CORS_ORIGIN_ALLOW_ALL = True
 
+SESSION_COOKIE_SECURE = False
+CORS_ALLOW_HEADERS = [
+    'Content-Type',
+    'x-captcha-key',
+    'x-session-key',
+    'Authorization'
+]
+CORS_ALLOW_METHODS = [
+    'GET',
+    'POST',
+    'PUT',
+    'DELETE',
+    'OPTIONS',
+]
+CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_ALL_ORIGINS = True
 # CORS_ALLOWED_ORIGINS = [
-#     "http://192.168.0.117",
-#     "http://192.168.0.130",
-#     "http://192.168.0.130:3001",
-#     "http://localhost:3000",
-#     "https://example.com",
+#     'http://192.168.0.117:3001',
+#     # Add more origins as needed
 # ]
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ORIGIN_WHITELIST = [
+    'http://192.168.0.117:3001',  # Whitelist your Angular app's domain
+    # Add other allowed origins as needed
+]

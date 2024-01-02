@@ -19,7 +19,8 @@ class UserManager(BaseUserManager):
             is_active=is_active,
             is_admin=is_admin,
         )
-        user.set_password(password)
+        if password:  # If password is provided
+            user.password = password
         user.save(using=self._db)
         return user
 
@@ -119,3 +120,16 @@ class Document(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Department(models.Model):
+    dep_id = models.CharField(max_length=5, primary_key=True)
+    dep_name = models.CharField(max_length=255)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+
+class CATEGORY(models.Model):
+    cat_id = models.CharField(max_length=5, primary_key=True)
+    cat_name = models.CharField(max_length=255)
+    status = models.BooleanField(default=True)
+    # dep_id =

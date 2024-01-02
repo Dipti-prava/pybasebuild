@@ -25,11 +25,11 @@ urlpatterns = [
     path('admin/list_document/', list_documents_admin, name='list_documents'),
 
     # ==================== document upload ============================
-    path('user/upload_document/', upload_document, name='upload_document'),
-    path('user/list_document/', list_documents, name='list_documents'),
-    path('user/get_document_by_id/', get_document_by_id, name='get_document_by_id'),
-    path('user/get_documentby_doc_id/', get_documentby_doc_id, name='get_documentby_doc_id'),
-    path('user/update_document/', update_document, name='update_document'),
-    path('user/delete_document/<int:doc_id>', delete_document, name='delete_document')
+    path('department/upload_document/', upload_document, name='upload_document'),
+    path('department/getAllDocument/', list_documents, name='list_documents'),
+    path('department/delete_document/', delete_document, name='delete_document'),
+    path('department/get_document_by_id/', get_document_by_id, name='get_document_by_id'),
+    path('department/get_documentby_doc_id/', get_documentby_doc_id, name='get_documentby_doc_id'),
+    path('department/update_document/', update_document, name='update_document'),
 
 ]
